@@ -4,6 +4,7 @@ import FiberPieChart from './components/FiberPieChart.vue'
 import PerformanceRadar from './components/PerformanceRadar.vue'
 import RecipeList from './components/RecipeList.vue'
 import RecipeManager from './components/RecipeManager.vue'
+import RecipeComparison from './components/RecipeComparison.vue'
 </script>
 
 <template>
@@ -47,12 +48,7 @@ import RecipeManager from './components/RecipeManager.vue'
             </div>
           </div>
 
-          <div class="comparison-section">
-            <div class="section-header">
-              <h3 class="section-title">历史配方对比</h3>
-              <span class="section-tip">在右侧选择配方，在雷达图中查看对比</span>
-            </div>
-          </div>
+          <RecipeComparison />
         </div>
 
         <div class="right-column">
@@ -209,31 +205,6 @@ import RecipeManager from './components/RecipeManager.vue'
 
 .chart-card {
   min-height: 360px;
-}
-
-.comparison-section {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.section-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-}
-
-.section-tip {
-  font-size: 12px;
-  color: #999;
 }
 
 .app-footer {

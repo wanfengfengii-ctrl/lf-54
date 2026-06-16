@@ -29,8 +29,13 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
 </script>
 
 <template>
-  <div class="fiber-slider-panel">
-    <h3 class="panel-title">原料配比调整</h3>
+  <div class="fiber-slider-panel" :class="{ disabled: !store.canEditRatio }">
+    <h3 class="panel-title">
+      原料配比调整
+      <span v-if="!store.canEditRatio" class="locked-badge">
+        🔒 已定版，不可编辑
+      </span>
+    </h3>
     <div class="total-ratio" :class="{ invalid: !store.isRatioValid }">
       <span>合计：</span>
       <span class="ratio-value">{{ store.totalRatio.toFixed(2) }}%</span>
@@ -54,6 +59,7 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
               min="0"
               max="100"
               step="0.01"
+              :disabled="!store.canEditRatio"
             />
             <span class="unit">%</span>
           </div>
@@ -68,6 +74,7 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
             max="100"
             step="0.01"
             :style="{ '--slider-color': fiber.color }"
+            :disabled="!store.canEditRatio"
           />
         </div>
         <div class="slider-scale">
@@ -100,6 +107,12 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s;
+}
+
+.fiber-slider-panel.disabled {
+  opacity: 0.75;
+  background: #fafafa;
 }
 
 .panel-title {
@@ -107,6 +120,19 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
   font-size: 18px;
   font-weight: 600;
   color: #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.locked-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: #d46b08;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .total-ratio {
@@ -194,6 +220,12 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
   box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
+.fiber-input:disabled {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
 .unit {
   font-size: 13px;
   color: #666;
@@ -215,6 +247,11 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
   cursor: pointer;
 }
 
+.range-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .range-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -232,6 +269,14 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
   transform: scale(1.15);
 }
 
+.range-slider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+.range-slider:disabled::-webkit-slider-thumb:hover {
+  transform: none;
+}
+
 .range-slider::-moz-range-thumb {
   width: 20px;
   height: 20px;
@@ -240,6 +285,10 @@ function handleInputChange(key: keyof FiberRatio, event: Event) {
   border: 3px solid #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   cursor: pointer;
+}
+
+.range-slider:disabled::-moz-range-thumb {
+  cursor: not-allowed;
 }
 
 .slider-scale {

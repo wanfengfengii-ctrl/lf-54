@@ -53,6 +53,7 @@ export const useRecipeStore = defineStore('recipe', () => {
   ])
 
   const selectedRecipeIds = ref<string[]>([])
+  const loadedRecipeId = ref<string | null>(null)
 
   const currentPerformance = computed<PaperPerformance>(() => {
     return calculatePerformance(currentRatio.value)
@@ -70,11 +71,28 @@ export const useRecipeStore = defineStore('recipe', () => {
     return validateRatio(currentRatio.value).message || ''
   })
 
+  const loadedRecipe = computed(() => {
+    if (!loadedRecipeId.value) return null
+    return recipes.value.find(r => r.id === loadedRecipeId.value) || null
+  })
+
   const canEditRatio = computed(() => {
-    return true
+    if (!loadedRecipe.value) return true
+    return loadedRecipe.value.status === 'draft'
+  })
+
+  const selectedRecipes = computed(() => {
+    return recipes.value.filter(r => selectedRecipeIds.value.includes(r.id))
   })
 
   function setFiberRatio(key: keyof FiberRatio, value: number) {
+    if (!canEditRatio.value) return
+
+    if (loadedRecipeId.value) {
+      loadedRecipeId.value = null
+      currentName.value = '新配方（未保存）'
+    }
+
     const clampedValue = Math.max(0, Math.min(100, value))
     const others = FIBER_INFO_LIST.filter(f => f.key !== key)
     const othersTotal = others.reduce((sum, f) => sum + currentRatio.value[f.key], 0)
@@ -155,12 +173,21 @@ export const useRecipeStore = defineStore('recipe', () => {
     const recipe = recipes.value.find(r => r.id === recipeId)
     if (!recipe) return false
 
+    loadedRecipeId.value = recipeId
     currentRatio.value = { ...recipe.fiberRatio }
     currentName.value = recipe.name
     currentConclusion.value = recipe.conclusion
     currentRating.value = recipe.rating
 
     return true
+  }
+
+  function resetToNewRecipe() {
+    loadedRecipeId.value = null
+    currentRatio.value = { chuPi: 40, hemp: 30, bamboo: 20, straw: 10 }
+    currentName.value = '新配方'
+    currentConclusion.value = ''
+    currentRating.value = 0
   }
 
   function finalizeRecipe(recipeId: string) {
@@ -220,6 +247,7 @@ export const useRecipeStore = defineStore('recipe', () => {
       return { success: false, message: `导入失败：${validation.message}` }
     }
 
+    loadedRecipeId.value = null
     currentRatio.value = { ...recipeData.fiberRatio }
     if (recipeData.name) currentName.value = recipeData.name
     if (recipeData.conclusion !== undefined) currentConclusion.value = recipeData.conclusion
@@ -258,12 +286,16 @@ export const useRecipeStore = defineStore('recipe', () => {
     isRatioValid,
     ratioErrorMessage,
     canEditRatio,
-    recipes,
+    loadedRecipeId,
+    loadedRecipe,
     selectedRecipeIds,
+    selectedRecipes,
+    recipes,
     setFiberRatio,
     saveAsNewVersion,
     updateCurrentRecipe,
     loadRecipe,
+    resetToNewRecipe,
     finalizeRecipe,
     verifyRecipe,
     deleteRecipe,
