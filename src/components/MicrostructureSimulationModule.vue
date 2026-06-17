@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, computed } from 'vue'
+import { inject, computed, ref } from 'vue'
 import { useRecipeStore } from '../stores/recipe'
 import FiberSlider from './FiberSlider.vue'
 import ProcessParamsPanel from './ProcessParamsPanel.vue'
@@ -8,6 +8,7 @@ import PoreHistogram from './PoreHistogram.vue'
 import PredictionRadar from './PredictionRadar.vue'
 import LayerStructure from './LayerStructure.vue'
 import SimulationSnapshotPanel from './SimulationSnapshotPanel.vue'
+import ReproducibleExperimentMode from './ReproducibleExperimentMode.vue'
 import { MICROSTRUCTURE_KEYS } from '../types'
 
 const switchModule = inject<(module: 'recipe' | 'microstructure') => void>('switchModule')!
@@ -15,6 +16,7 @@ const activeModule = inject('activeModule') as any
 const store = useRecipeStore()
 
 const currentMicrostructure = computed(() => store.currentMicrostructure)
+const showReproMode = ref(true)
 </script>
 
 <template>
@@ -60,6 +62,10 @@ const currentMicrostructure = computed(() => store.currentMicrostructure)
           <span class="badge">
             <span class="badge-icon">🎯</span>
             <span>5项性能预测</span>
+          </span>
+          <span class="badge" :class="{ active: showReproMode }" @click="showReproMode = !showReproMode" style="cursor:pointer;">
+            <span class="badge-icon">{{ showReproMode ? '✅' : '🔬' }}</span>
+            <span>{{ showReproMode ? '复现模式开启' : '复现实验模式' }}</span>
           </span>
         </div>
       </div>
@@ -118,6 +124,8 @@ const currentMicrostructure = computed(() => store.currentMicrostructure)
         </div>
         
         <LayerStructure />
+
+        <ReproducibleExperimentMode v-show="showReproMode" />
       </div>
 
       <div class="right-column">

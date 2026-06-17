@@ -310,6 +310,125 @@ export interface SimulationSnapshot {
   layerInfo: Array<{ index: number; thickness: number; density: number; fiberMix: FiberRatio; isTop: boolean; isBottom: boolean }>
   createdAt: number
   note: string
+  seed: number
+  checksum: string
+}
+
+export interface SeedConfig {
+  customSeed: number | null
+  isLocked: boolean
+  lastUsedSeed: number
+  autoIncrement: boolean
+}
+
+export type ScanParamKey = keyof ProcessParams
+
+export interface ParamScanConfig {
+  paramKey: ScanParamKey
+  enabled: boolean
+  startValue: number
+  endValue: number
+  stepValue: number
+}
+
+export interface BatchScanConfig {
+  id: string
+  name: string
+  baseFiberRatio: FiberRatio
+  baseParams: ProcessParams
+  scanConfigs: Partial<Record<ScanParamKey, ParamScanConfig>>
+  createdAt: number
+  baseSeed: number
+}
+
+export interface ScanResultItem {
+  id: string
+  scanId: string
+  params: ProcessParams
+  fiberRatio: FiberRatio
+  microstructure: MicrostructureResult
+  prediction: PredictionIndicators
+  seed: number
+  index: number
+  tag: string
+}
+
+export interface BatchScanResult {
+  id: string
+  config: BatchScanConfig
+  results: ScanResultItem[]
+  status: 'running' | 'completed' | 'failed'
+  progress: number
+  startedAt: number
+  completedAt: number | null
+  error?: string
+}
+
+export interface DiffAnalysisInput {
+  baseId: string
+  targetIds: string[]
+  mode: 'snapshot' | 'scan'
+}
+
+export interface DiffValue {
+  base: number
+  target: number
+  diff: number
+  diffPercent: number
+  significance: 'insignificant' | 'low' | 'medium' | 'high'
+}
+
+export type MicroDiff = {
+  [K in keyof MicrostructureResult]?: DiffValue
+}
+
+export type PredictionDiff = {
+  [K in keyof PredictionIndicators]?: DiffValue
+}
+
+export type ParamDiff = {
+  [K in keyof ProcessParams]?: DiffValue
+}
+
+export interface DiffAnalysisResult {
+  id: string
+  baseItemId: string
+  targetItemId: string
+  baseLabel: string
+  targetLabel: string
+  paramDiff: ParamDiff
+  microDiff: MicroDiff
+  predictionDiff: PredictionDiff
+  overallSimilarity: number
+  mostChangedMicro: string | null
+  mostChangedPrediction: string | null
+  generatedAt: number
+}
+
+export interface ComparisonGroup {
+  id: string
+  name: string
+  snapshotIds: string[]
+  scanResultIds: string[]
+  createdAt: number
+  description: string
+}
+
+export interface ReproducibilityReport {
+  id: string
+  generatedAt: number
+  originalSnapshotId: string
+  replaySnapshotId: string
+  originalSeed: number
+  replaySeed: number
+  paramsMatch: boolean
+  ratioMatch: boolean
+  microMatch: boolean
+  predictionMatch: boolean
+  maxMicroError: number
+  maxPredictionError: number
+  status: 'exact' | 'near' | 'failed'
+  details: string[]
 }
 
 export const PROCESS_PARAM_RANGES: Record<keyof ProcessParams, { min: number; max: number; step: number; unit: string; label: string }> = {

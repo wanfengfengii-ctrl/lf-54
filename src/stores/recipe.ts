@@ -13,13 +13,45 @@ import type {
   ResearchNote,
   ExperimentTemplate,
   AdvancedFilter,
-  RecipeRecommendation
+  RecipeRecommendation,
+  SeedConfig,
+  BatchScanConfig,
+  BatchScanResult,
+  ScanResultItem,
+  DiffAnalysisResult,
+  DiffValue,
+  ParamDiff,
+  MicroDiff,
+  PredictionDiff,
+  ReproducibilityReport,
+  ComparisonGroup,
+  ScanParamKey
 } from '../types'
-import { FIBER_INFO_LIST, PERFORMANCE_KEYS } from '../types'
+import {
+  FIBER_INFO_LIST,
+  PERFORMANCE_KEYS,
+  PROCESS_PARAM_RANGES,
+  MICROSTRUCTURE_KEYS,
+  PREDICTION_KEYS
+} from '../types'
 import { calculatePerformance, validateRatio, generateId } from '../utils/performance'
-import { simulateMicrostructure, predictIndicators, generatePoreHistogram, generateFiberPaths, generateLayerInfo } from '../utils/microstructure'
-import type { ProcessParams, MicrostructureResult, PredictionIndicators, SimulationSnapshot } from '../types'
-import { PROCESS_PARAM_RANGES } from '../types'
+import {
+  simulateMicrostructure,
+  predictIndicators,
+  generatePoreHistogram,
+  generateFiberPaths,
+  generateLayerInfo,
+  runReplaySimulation,
+  computeSnapshotChecksum,
+  generateRandomSeed,
+  generateDeterministicSeed
+} from '../utils/microstructure'
+import type {
+  ProcessParams,
+  MicrostructureResult,
+  PredictionIndicators,
+  SimulationSnapshot
+} from '../types'
 
 const DEFAULT_RATING_DETAIL: RatingDetail = {
   overall: 0,
@@ -186,12 +218,41 @@ export const useRecipeStore = defineStore('recipe', () => {
     dryingDuration: 30
   })
 
+  const seedConfig = ref<SeedConfig>({
+    customSeed: null,
+    isLocked: false,
+    lastUsedSeed: 0,
+    autoIncrement: false
+  })
+
   const simulationSnapshots = ref<SimulationSnapshot[]>([])
 
   const selectedSnapshotIds = ref<string[]>([])
 
+  const batchScanResults = ref<BatchScanResult[]>([])
+
+  const currentScanResultIds = ref<string[]>([])
+
+  const diffAnalysisResults = ref<DiffAnalysisResult[]>([])
+
+  const reproducibilityReports = ref<ReproducibilityReport[]>([])
+
+  const comparisonGroups = ref<ComparisonGroup[]>([])
+
+  let seedCounter = 0
+
   const currentPerformance = computed<PaperPerformance>(() => {
     return calculatePerformance(currentRatio.value)
+  })
+
+  const effectiveSeed = computed<number>(() => {
+    if (seedConfig.value.customSeed !== null && seedConfig.value.isLocked) {
+      return seedConfig.value.customSeed
+    }
+    if (seedConfig.value.autoIncrement) {
+      return seedConfig.value.lastUsedSeed
+    }
+    return generateDeterministicSeed(currentRatio.value, processParams.value)
   })
 
   const currentMicrostructure = computed<MicrostructureResult>(() => {
@@ -204,6 +265,25 @@ export const useRecipeStore = defineStore('recipe', () => {
 
   const selectedSnapshots = computed(() => {
     return simulationSnapshots.value.filter(s => selectedSnapshotIds.value.includes(s.id))
+  })
+
+  const currentScanResults = computed(() => {
+    const scanMap = new Map<string, ScanResultItem>()
+    batchScanResults.value.forEach(scan => {
+      scan.results.forEach(r => {
+        if (currentScanResultIds.value.includes(r.id)) {
+          scanMap.set(r.id, r)
+        }
+      })
+    })
+    return Array.from(scanMap.values())
+  })
+
+  const allSelectedForComparison = computed(() => {
+    return {
+      snapshots: selectedSnapshots.value,
+      scanResults: currentScanResults.value
+    }
   })
 
   const totalRatio = computed(() => {
@@ -986,18 +1066,34 @@ ${recipe.conclusion || '暂无结论'}
     const ratio = currentRatio.value
     const params = processParams.value
     const micro = currentMicrostructure.value
+    const pred = currentPrediction.value
+
+    const seed = seedConfig.value.isLocked && seedConfig.value.customSeed !== null
+      ? seedConfig.value.customSeed
+      : (seedConfig.value.autoIncrement ? seedConfig.value.lastUsedSeed + seedCounter++ : effectiveSeed.value)
+
+    seedConfig.value.lastUsedSeed = seed
+
+    const poreHistogram = generatePoreHistogram(micro, ratio, params, seed)
+    const fiberPaths = generateFiberPaths(ratio, params, 600, 400, seed)
+    const layerInfo = generateLayerInfo(ratio, params, micro, seed)
+
+    const partial = { params: { ...params }, fiberRatio: { ...ratio }, microstructure: { ...micro }, prediction: { ...pred }, seed }
+    const checksum = computeSnapshotChecksum(partial)
 
     const snapshot: SimulationSnapshot = {
       id: generateId(),
       params: { ...params },
       fiberRatio: { ...ratio },
       microstructure: { ...micro },
-      prediction: { ...currentPrediction.value },
-      poreHistogram: generatePoreHistogram(micro, ratio, params),
-      fiberPaths: generateFiberPaths(ratio, params, 600, 400),
-      layerInfo: generateLayerInfo(ratio, params, micro),
+      prediction: { ...pred },
+      poreHistogram,
+      fiberPaths,
+      layerInfo,
       createdAt: Date.now(),
-      note
+      note,
+      seed,
+      checksum
     }
     simulationSnapshots.value.unshift(snapshot)
     return snapshot
@@ -1016,6 +1112,8 @@ ${recipe.conclusion || '暂无结论'}
     if (!snapshot) return false
     processParams.value = { ...snapshot.params }
     currentRatio.value = { ...snapshot.fiberRatio }
+    seedConfig.value.customSeed = snapshot.seed
+    seedConfig.value.isLocked = true
     loadedRecipeId.value = null
     return true
   }
@@ -1023,7 +1121,7 @@ ${recipe.conclusion || '暂无结论'}
   function toggleSelectSnapshot(snapshotId: string) {
     const index = selectedSnapshotIds.value.indexOf(snapshotId)
     if (index === -1) {
-      if (selectedSnapshotIds.value.length < 3) {
+      if (selectedSnapshotIds.value.length < 5) {
         selectedSnapshotIds.value.push(snapshotId)
       }
     } else {
@@ -1033,6 +1131,366 @@ ${recipe.conclusion || '暂无结论'}
 
   function clearSelectedSnapshots() {
     selectedSnapshotIds.value = []
+  }
+
+  function setCustomSeed(seed: number | null) {
+    seedConfig.value.customSeed = seed
+    if (seed !== null) {
+      seedConfig.value.lastUsedSeed = seed
+    }
+  }
+
+  function toggleSeedLock(locked: boolean) {
+    seedConfig.value.isLocked = locked
+    if (locked && seedConfig.value.customSeed === null) {
+      seedConfig.value.customSeed = generateRandomSeed()
+      seedConfig.value.lastUsedSeed = seedConfig.value.customSeed
+    }
+  }
+
+  function toggleAutoIncrement(enabled: boolean) {
+    seedConfig.value.autoIncrement = enabled
+    if (enabled && seedConfig.value.lastUsedSeed === 0) {
+      seedConfig.value.lastUsedSeed = generateRandomSeed()
+    }
+  }
+
+  function regenerateRandomSeed() {
+    const seed = generateRandomSeed()
+    seedConfig.value.customSeed = seed
+    seedConfig.value.lastUsedSeed = seed
+  }
+
+  function buildParamCombinations(config: BatchScanConfig): ProcessParams[] {
+    const keys = Object.keys(config.scanConfigs) as ScanParamKey[]
+    const activeKeys = keys.filter(k => config.scanConfigs[k]?.enabled)
+    const paramSets: ProcessParams[] = [{ ...config.baseParams }]
+
+    for (const key of activeKeys) {
+      const scanCfg = config.scanConfigs[key]!
+      const values: number[] = []
+      for (let v = scanCfg.startValue; v <= scanCfg.endValue + 0.0001; v += scanCfg.stepValue) {
+        const range = PROCESS_PARAM_RANGES[key]
+        const clamped = Math.max(range.min, Math.min(range.max, Number(v.toFixed(3))))
+        values.push(clamped)
+      }
+      const nextSets: ProcessParams[] = []
+      for (const existing of paramSets) {
+        for (const v of values) {
+          nextSets.push({ ...existing, [key]: v })
+        }
+      }
+      paramSets.splice(0, paramSets.length, ...nextSets)
+    }
+    return paramSets
+  }
+
+  function createBatchScan(config: Omit<BatchScanConfig, 'id' | 'createdAt' | 'baseSeed'>): BatchScanResult {
+    const fullConfig: BatchScanConfig = {
+      ...config,
+      id: generateId(),
+      createdAt: Date.now(),
+      baseSeed: seedConfig.value.isLocked && seedConfig.value.customSeed !== null
+        ? seedConfig.value.customSeed
+        : generateDeterministicSeed(config.baseFiberRatio, config.baseParams)
+    }
+    const combinations = buildParamCombinations(fullConfig)
+    const total = combinations.length
+    const MAX_COMBINATIONS = 200
+    if (total > MAX_COMBINATIONS) {
+      const batchResult: BatchScanResult = {
+        id: fullConfig.id,
+        config: fullConfig,
+        results: [],
+        status: 'failed',
+        progress: 0,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        error: `参数组合数(${total})超过上限(${MAX_COMBINATIONS})，请缩小扫描范围或减少参数维度`
+      }
+      batchScanResults.value.unshift(batchResult)
+      return batchResult
+    }
+    const results: ScanResultItem[] = []
+
+    combinations.forEach((params, i) => {
+      const micro = simulateMicrostructure(fullConfig.baseFiberRatio, params)
+      const pred = predictIndicators(fullConfig.baseFiberRatio, params, micro)
+      const scanSeed = fullConfig.baseSeed + i
+      const tag = buildScanResultTag(params, fullConfig.baseParams)
+      results.push({
+        id: generateId(),
+        scanId: fullConfig.id,
+        params: { ...params },
+        fiberRatio: { ...fullConfig.baseFiberRatio },
+        microstructure: { ...micro },
+        prediction: { ...pred },
+        seed: scanSeed,
+        index: i,
+        tag
+      })
+    })
+
+    const batchResult: BatchScanResult = {
+      id: fullConfig.id,
+      config: fullConfig,
+      results,
+      status: 'completed',
+      progress: 100,
+      startedAt: Date.now(),
+      completedAt: Date.now()
+    }
+    batchScanResults.value.unshift(batchResult)
+    return batchResult
+  }
+
+  function buildScanResultTag(params: ProcessParams, base: ProcessParams): string {
+    const diffs: string[] = []
+    const paramLabels: Record<ScanParamKey, string> = {
+      beatingDegree: '打浆',
+      sheetThickness: '厚度',
+      pressingIntensity: '压榨',
+      dryingTemperature: '干温',
+      dryingDuration: '干时'
+    }
+    const units: Record<ScanParamKey, string> = {
+      beatingDegree: '°SR',
+      sheetThickness: 'μm',
+      pressingIntensity: 'MPa',
+      dryingTemperature: '℃',
+      dryingDuration: 'min'
+    }
+    const keys = Object.keys(paramLabels) as ScanParamKey[]
+    for (const k of keys) {
+      if (Math.abs(params[k] - base[k]) > 0.001) {
+        diffs.push(`${paramLabels[k]}${params[k]}${units[k]}`)
+      }
+    }
+    return diffs.length > 0 ? diffs.join(' ') : '基准'
+  }
+
+  function deleteBatchScan(scanId: string) {
+    const idx = batchScanResults.value.findIndex(s => s.id === scanId)
+    if (idx > -1) {
+      const resultIds = batchScanResults.value[idx].results.map(r => r.id)
+      batchScanResults.value.splice(idx, 1)
+      currentScanResultIds.value = currentScanResultIds.value.filter(id => !resultIds.includes(id))
+    }
+  }
+
+  function toggleSelectScanResult(resultId: string) {
+    const idx = currentScanResultIds.value.indexOf(resultId)
+    const totalSelected = currentScanResultIds.value.length + selectedSnapshotIds.value.length
+    if (idx === -1) {
+      if (totalSelected < 5) {
+        currentScanResultIds.value.push(resultId)
+      }
+    } else {
+      currentScanResultIds.value.splice(idx, 1)
+    }
+  }
+
+  function clearSelectedScanResults() {
+    currentScanResultIds.value = []
+  }
+
+  function clearAllComparisons() {
+    selectedSnapshotIds.value = []
+    currentScanResultIds.value = []
+  }
+
+  function calcDiffValue(base: number, target: number, _maxRef: number = 100): DiffValue {
+    const diff = Number((target - base).toFixed(3))
+    const baseRef = Math.max(Math.abs(base), 0.001)
+    const diffPercent = Number(((diff / baseRef) * 100).toFixed(2))
+    const absPercent = Math.abs(diffPercent)
+    let significance: DiffValue['significance'] = 'insignificant'
+    if (absPercent >= 20) significance = 'high'
+    else if (absPercent >= 10) significance = 'medium'
+    else if (absPercent >= 3) significance = 'low'
+    return { base, target, diff, diffPercent, significance }
+  }
+
+  function performDiffAnalysis(
+    baseItem: { id: string; label: string; params: ProcessParams; fiberRatio: FiberRatio; microstructure: MicrostructureResult; prediction: PredictionIndicators },
+    targetItems: Array<{ id: string; label: string; params: ProcessParams; fiberRatio: FiberRatio; microstructure: MicrostructureResult; prediction: PredictionIndicators }>
+  ): DiffAnalysisResult[] {
+    const results: DiffAnalysisResult[] = []
+    const paramKeys = Object.keys(PROCESS_PARAM_RANGES) as Array<keyof ProcessParams>
+    const microKeys = MICROSTRUCTURE_KEYS.map(k => k.key)
+    const predKeys = PREDICTION_KEYS.map(k => k.key)
+
+    for (const target of targetItems) {
+      const paramDiff: ParamDiff = {}
+      paramKeys.forEach(k => {
+        paramDiff[k] = calcDiffValue(baseItem.params[k], target.params[k], PROCESS_PARAM_RANGES[k].max)
+      })
+
+      const microDiff: MicroDiff = {}
+      let maxMicroDiff = 0
+      let maxMicroKey: string | null = null
+      microKeys.forEach(k => {
+        const info = MICROSTRUCTURE_KEYS.find(m => m.key === k)!
+        microDiff[k] = calcDiffValue(baseItem.microstructure[k], target.microstructure[k], info.max)
+        const abs = Math.abs(microDiff[k]!.diffPercent)
+        if (abs > maxMicroDiff) {
+          maxMicroDiff = abs
+          maxMicroKey = info.name
+        }
+      })
+
+      const predictionDiff: PredictionDiff = {}
+      let maxPredDiff = 0
+      let maxPredKey: string | null = null
+      predKeys.forEach(k => {
+        const info = PREDICTION_KEYS.find(p => p.key === k)!
+        const baseVal = baseItem.prediction[k]
+        const targetVal = target.prediction[k]
+        const refMax = Math.max(Math.abs(baseVal), 1)
+        predictionDiff[k] = calcDiffValue(baseVal, targetVal, refMax)
+        const abs = Math.abs(predictionDiff[k]!.diffPercent)
+        if (abs > maxPredDiff) {
+          maxPredDiff = abs
+          maxPredKey = info.name
+        }
+      })
+
+      let simScore = 100
+      microKeys.forEach(k => { simScore -= Math.min(20, Math.abs(microDiff[k]!.diffPercent) * 0.5) })
+      predKeys.forEach(k => { simScore -= Math.min(15, Math.abs(predictionDiff[k]!.diffPercent) * 0.4) })
+      paramKeys.forEach(k => { simScore -= Math.min(10, Math.abs(paramDiff[k]!.diffPercent) * 0.3) })
+      const overallSimilarity = Math.max(0, Number(simScore.toFixed(1)))
+
+      results.push({
+        id: generateId(),
+        baseItemId: baseItem.id,
+        targetItemId: target.id,
+        baseLabel: baseItem.label,
+        targetLabel: target.label,
+        paramDiff,
+        microDiff,
+        predictionDiff,
+        overallSimilarity,
+        mostChangedMicro: maxMicroKey,
+        mostChangedPrediction: maxPredKey,
+        generatedAt: Date.now()
+      })
+    }
+
+    diffAnalysisResults.value.unshift(...results)
+    return results
+  }
+
+  function clearDiffResults() {
+    diffAnalysisResults.value = []
+  }
+
+  function runReproducibilityCheck(snapshotId: string): ReproducibilityReport | null {
+    const original = simulationSnapshots.value.find(s => s.id === snapshotId)
+    if (!original) return null
+
+    const replayed = runReplaySimulation(original)
+    const microKeys = MICROSTRUCTURE_KEYS.map(k => k.key)
+    const predKeys = PREDICTION_KEYS.map(k => k.key)
+    const details: string[] = []
+
+    const paramsMatch = JSON.stringify(original.params) === JSON.stringify(replayed.params)
+    const ratioMatch = JSON.stringify(original.fiberRatio) === JSON.stringify(replayed.fiberRatio)
+    if (!paramsMatch) details.push('⚠️ 参数数据存在差异（异常）')
+    if (!ratioMatch) details.push('⚠️ 配方数据存在差异（异常）')
+
+    let maxMicroError = 0
+    microKeys.forEach(k => {
+      const err = Math.abs(original.microstructure[k] - replayed.microstructure[k])
+      maxMicroError = Math.max(maxMicroError, err)
+    })
+    const microMatch = maxMicroError < 0.001
+
+    let maxPredError = 0
+    predKeys.forEach(k => {
+      const err = Math.abs(original.prediction[k] - replayed.prediction[k])
+      maxPredError = Math.max(maxPredError, err)
+    })
+    const predictionMatch = maxPredError < 0.001
+
+    const replayChecksum = computeSnapshotChecksum({
+      params: original.params,
+      fiberRatio: original.fiberRatio,
+      microstructure: replayed.microstructure,
+      prediction: replayed.prediction,
+      seed: original.seed
+    })
+    const checksumMatch = replayChecksum === original.checksum
+
+    if (microMatch && predictionMatch && checksumMatch) {
+      details.push('✅ 微观结构数据精确匹配')
+      details.push('✅ 性能预测数据精确匹配')
+      details.push(`✅ 校验和验证通过 (${original.checksum})`)
+    } else {
+      details.push(`最大微观误差: ${maxMicroError.toFixed(4)}`)
+      details.push(`最大预测误差: ${maxPredError.toFixed(4)}`)
+      if (!checksumMatch) details.push(`❌ 校验和不匹配 (原: ${original.checksum}, 重: ${replayChecksum})`)
+    }
+
+    let status: ReproducibilityReport['status'] = 'failed'
+    const totalError = maxMicroError + maxPredError
+    if (totalError < 0.001 && checksumMatch) status = 'exact'
+    else if (totalError < 0.5) status = 'near'
+
+    const report: ReproducibilityReport = {
+      id: generateId(),
+      generatedAt: Date.now(),
+      originalSnapshotId: original.id,
+      replaySnapshotId: generateId(),
+      originalSeed: original.seed,
+      replaySeed: replayed.seed,
+      paramsMatch,
+      ratioMatch,
+      microMatch,
+      predictionMatch,
+      maxMicroError: Number(maxMicroError.toFixed(4)),
+      maxPredictionError: Number(maxPredError.toFixed(4)),
+      status,
+      details
+    }
+    reproducibilityReports.value.unshift(report)
+    return report
+  }
+
+  function clearReproducibilityReports() {
+    reproducibilityReports.value = []
+  }
+
+  function exportReproducibilityReport(reportId: string): string {
+    const report = reproducibilityReports.value.find(r => r.id === reportId)
+    const snapshot = report ? simulationSnapshots.value.find(s => s.id === report.originalSnapshotId) : null
+    if (!report || !snapshot) return ''
+
+    const statusMap: Record<string, string> = { exact: '完全复现 ✅', near: '近似复现 ⚠️', failed: '复现失败 ❌' }
+    return `# 复现性验证报告
+
+生成时间：${new Date(report.generatedAt).toLocaleString()}
+复现状态：${statusMap[report.status]}
+快照名称：${snapshot.note || '未命名快照'}
+原始种子：${report.originalSeed}
+重放种子：${report.replaySeed}
+
+## 匹配情况
+| 项目 | 结果 |
+|------|------|
+| 参数匹配 | ${report.paramsMatch ? '✅' : '❌'} |
+| 配方匹配 | ${report.ratioMatch ? '✅' : '❌'} |
+| 微观结构匹配 | ${report.microMatch ? '✅' : '❌'} |
+| 性能预测匹配 | ${report.predictionMatch ? '✅' : '❌'} |
+| 最大微观误差 | ${report.maxMicroError} |
+| 最大预测误差 | ${report.maxPredictionError} |
+
+## 详细信息
+${report.details.map(d => '- ' + d).join('\n')}
+
+---
+*手工纸微观结构模拟复现性报告*
+`
   }
 
   return {
@@ -1072,6 +1530,15 @@ ${recipe.conclusion || '暂无结论'}
     simulationSnapshots,
     selectedSnapshotIds,
     selectedSnapshots,
+    seedConfig,
+    effectiveSeed,
+    batchScanResults,
+    currentScanResultIds,
+    currentScanResults,
+    allSelectedForComparison,
+    diffAnalysisResults,
+    reproducibilityReports,
+    comparisonGroups,
     setProcessParam,
     resetProcessParams,
     saveSimulationSnapshot,
@@ -1079,6 +1546,21 @@ ${recipe.conclusion || '暂无结论'}
     loadSimulationSnapshot,
     toggleSelectSnapshot,
     clearSelectedSnapshots,
+    setCustomSeed,
+    toggleSeedLock,
+    toggleAutoIncrement,
+    regenerateRandomSeed,
+    createBatchScan,
+    deleteBatchScan,
+    toggleSelectScanResult,
+    clearSelectedScanResults,
+    clearAllComparisons,
+    buildParamCombinations,
+    performDiffAnalysis,
+    clearDiffResults,
+    runReproducibilityCheck,
+    clearReproducibilityReports,
+    exportReproducibilityReport,
     setFiberRatio,
     saveAsNewVersion,
     updateCurrentRecipe,
