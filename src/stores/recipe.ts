@@ -17,6 +17,9 @@ import type {
 } from '../types'
 import { FIBER_INFO_LIST, PERFORMANCE_KEYS } from '../types'
 import { calculatePerformance, validateRatio, generateId } from '../utils/performance'
+import { simulateMicrostructure, predictIndicators } from '../utils/microstructure'
+import type { ProcessParams, MicrostructureResult, PredictionIndicators, SimulationSnapshot } from '../types'
+import { PROCESS_PARAM_RANGES } from '../types'
 
 const DEFAULT_RATING_DETAIL: RatingDetail = {
   overall: 0,
@@ -175,8 +178,32 @@ export const useRecipeStore = defineStore('recipe', () => {
   const selectedRecipeIds = ref<string[]>([])
   const loadedRecipeId = ref<string | null>(null)
 
+  const processParams = ref<ProcessParams>({
+    beatingDegree: 40,
+    sheetThickness: 80,
+    pressingIntensity: 5,
+    dryingTemperature: 60,
+    dryingDuration: 30
+  })
+
+  const simulationSnapshots = ref<SimulationSnapshot[]>([])
+
+  const selectedSnapshotIds = ref<string[]>([])
+
   const currentPerformance = computed<PaperPerformance>(() => {
     return calculatePerformance(currentRatio.value)
+  })
+
+  const currentMicrostructure = computed<MicrostructureResult>(() => {
+    return simulateMicrostructure(currentRatio.value, processParams.value)
+  })
+
+  const currentPrediction = computed<PredictionIndicators>(() => {
+    return predictIndicators(currentRatio.value, processParams.value, currentMicrostructure.value)
+  })
+
+  const selectedSnapshots = computed(() => {
+    return simulationSnapshots.value.filter(s => selectedSnapshotIds.value.includes(s.id))
   })
 
   const totalRatio = computed(() => {
@@ -291,7 +318,7 @@ export const useRecipeStore = defineStore('recipe', () => {
   })
 
   const recipeRecommendations = computed((): RecipeRecommendation[] => {
-    const currentRatio = currentRatio.value
+    const ratio = currentRatio.value
     const currentPerf = currentPerformance.value
     const recs: RecipeRecommendation[] = []
     const now = Date.now()
@@ -302,7 +329,7 @@ export const useRecipeStore = defineStore('recipe', () => {
         let similarity = 0
         const fiberKeys: Array<keyof FiberRatio> = ['chuPi', 'hemp', 'bamboo', 'straw']
         fiberKeys.forEach(key => {
-          similarity += 100 - Math.abs(currentRatio[key] - recipe.fiberRatio[key])
+          similarity += 100 - Math.abs(ratio[key] - recipe.fiberRatio[key])
         })
         similarity = similarity / 4
 
@@ -374,7 +401,7 @@ export const useRecipeStore = defineStore('recipe', () => {
         description: '尝试提升楮皮比例至 55% 以上，以增强纸张强度和耐久性',
         confidence: 72,
         suggestedRatio: { chuPi: 60, hemp: 20, bamboo: 15, straw: 5 },
-        expectedPerformance: { strength: 85, smoothness: 70, inkAbsorption: 65, durability: 88, flexibility: 72 },
+        expectedPerformance: { strength: 85, waterAbsorption: 70, texture: 65, durability: 88, whiteness: 72 },
         generatedAt: now
       })
 
@@ -385,7 +412,7 @@ export const useRecipeStore = defineStore('recipe', () => {
         description: '尝试四种纤维均衡配比，观察综合性能表现',
         confidence: 65,
         suggestedRatio: { chuPi: 30, hemp: 25, bamboo: 25, straw: 20 },
-        expectedPerformance: { strength: 75, smoothness: 75, inkAbsorption: 75, durability: 72, flexibility: 78 },
+        expectedPerformance: { strength: 75, waterAbsorption: 75, texture: 75, durability: 72, whiteness: 78 },
         generatedAt: now
       })
     }
@@ -567,7 +594,7 @@ export const useRecipeStore = defineStore('recipe', () => {
 ## 基本信息
 - 创建时间：${new Date(recipe.createdAt).toLocaleString()}
 - 最后更新：${new Date(recipe.updatedAt).toLocaleString()}
-- 状态：${store.getStatusText(recipe.status)}
+- 状态：${getStatusText(recipe.status)}
 - 标签：${recipe.tags.join('、') || '无'}
 
 ## 纤维配比
@@ -638,7 +665,7 @@ ${recipe.conclusion || '暂无结论'}
 
   function batchDeleteRecipes(recipeIds: string[]) {
     recipeIds.forEach(id => {
-      store.deleteRecipe(id)
+      deleteRecipe(id)
     })
     return { success: true, message: `已删除${recipeIds.length}个配方` }
   }
@@ -939,6 +966,68 @@ ${recipe.conclusion || '暂无结论'}
     return recipes.value.find(r => r.id === recipeId)
   }
 
+  function setProcessParam(key: keyof ProcessParams, value: number) {
+    const range = PROCESS_PARAM_RANGES[key]
+    const clampedValue = Math.max(range.min, Math.min(range.max, value))
+    processParams.value[key] = clampedValue
+  }
+
+  function resetProcessParams() {
+    processParams.value = {
+      beatingDegree: 40,
+      sheetThickness: 80,
+      pressingIntensity: 5,
+      dryingTemperature: 60,
+      dryingDuration: 30
+    }
+  }
+
+  function saveSimulationSnapshot(note: string = ''): SimulationSnapshot {
+    const snapshot: SimulationSnapshot = {
+      id: generateId(),
+      params: { ...processParams.value },
+      fiberRatio: { ...currentRatio.value },
+      microstructure: { ...currentMicrostructure.value },
+      prediction: { ...currentPrediction.value },
+      createdAt: Date.now(),
+      note
+    }
+    simulationSnapshots.value.unshift(snapshot)
+    return snapshot
+  }
+
+  function deleteSimulationSnapshot(snapshotId: string) {
+    const index = simulationSnapshots.value.findIndex(s => s.id === snapshotId)
+    if (index > -1) {
+      simulationSnapshots.value.splice(index, 1)
+      selectedSnapshotIds.value = selectedSnapshotIds.value.filter(id => id !== snapshotId)
+    }
+  }
+
+  function loadSimulationSnapshot(snapshotId: string) {
+    const snapshot = simulationSnapshots.value.find(s => s.id === snapshotId)
+    if (!snapshot) return false
+    processParams.value = { ...snapshot.params }
+    currentRatio.value = { ...snapshot.fiberRatio }
+    loadedRecipeId.value = null
+    return true
+  }
+
+  function toggleSelectSnapshot(snapshotId: string) {
+    const index = selectedSnapshotIds.value.indexOf(snapshotId)
+    if (index === -1) {
+      if (selectedSnapshotIds.value.length < 3) {
+        selectedSnapshotIds.value.push(snapshotId)
+      }
+    } else {
+      selectedSnapshotIds.value.splice(index, 1)
+    }
+  }
+
+  function clearSelectedSnapshots() {
+    selectedSnapshotIds.value = []
+  }
+
   return {
     currentRatio,
     currentName,
@@ -970,6 +1059,19 @@ ${recipe.conclusion || '暂无结论'}
     getResearchNotesForRecipe,
     recipeRecommendations,
     experimentStats,
+    processParams,
+    currentMicrostructure,
+    currentPrediction,
+    simulationSnapshots,
+    selectedSnapshotIds,
+    selectedSnapshots,
+    setProcessParam,
+    resetProcessParams,
+    saveSimulationSnapshot,
+    deleteSimulationSnapshot,
+    loadSimulationSnapshot,
+    toggleSelectSnapshot,
+    clearSelectedSnapshots,
     setFiberRatio,
     saveAsNewVersion,
     updateCurrentRecipe,

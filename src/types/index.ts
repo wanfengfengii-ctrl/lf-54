@@ -274,6 +274,66 @@ export const PERFORMANCE_KEYS: Array<{ key: keyof PaperPerformance; name: string
   { key: 'whiteness', name: '白度' }
 ]
 
+export interface ProcessParams {
+  beatingDegree: number
+  sheetThickness: number
+  pressingIntensity: number
+  dryingTemperature: number
+  dryingDuration: number
+}
+
+export interface MicrostructureResult {
+  fiberInterweaving: number
+  poreSize: number
+  poreDistribution: number
+  uniformity: number
+  layerCount: number
+  layerBonding: number
+}
+
+export interface PredictionIndicators {
+  strength: number
+  inkDiffusion: number
+  lightTransmittance: number
+  surfaceFineness: number
+  durability: number
+}
+
+export interface SimulationSnapshot {
+  id: string
+  params: ProcessParams
+  fiberRatio: FiberRatio
+  microstructure: MicrostructureResult
+  prediction: PredictionIndicators
+  createdAt: number
+  note: string
+}
+
+export const PROCESS_PARAM_RANGES: Record<keyof ProcessParams, { min: number; max: number; step: number; unit: string; label: string }> = {
+  beatingDegree: { min: 10, max: 90, step: 1, unit: '°SR', label: '打浆度' },
+  sheetThickness: { min: 20, max: 200, step: 5, unit: 'μm', label: '抄纸厚度' },
+  pressingIntensity: { min: 1, max: 10, step: 0.5, unit: 'MPa', label: '压榨强度' },
+  dryingTemperature: { min: 20, max: 120, step: 5, unit: '℃', label: '干燥温度' },
+  dryingDuration: { min: 1, max: 60, step: 1, unit: 'min', label: '干燥时长' }
+}
+
+export const PREDICTION_KEYS: Array<{ key: keyof PredictionIndicators; name: string; unit: string; description: string; color: string }> = [
+  { key: 'strength', name: '强度', unit: 'kN/m', description: '抗拉与抗撕裂强度预测', color: '#1890ff' },
+  { key: 'inkDiffusion', name: '吸墨扩散', unit: 'mm', description: '墨水在纸面扩散半径预测', color: '#722ed1' },
+  { key: 'lightTransmittance', name: '透光性', unit: '%', description: '光线透过纸张的比例预测', color: '#13c2c2' },
+  { key: 'surfaceFineness', name: '表面细腻度', unit: 'μm', description: '纸面粗糙度R预测（越低越细腻）', color: '#faad14' },
+  { key: 'durability', name: '耐久性', unit: '年', description: '预估安全保存年限', color: '#52c41a' }
+]
+
+export const MICROSTRUCTURE_KEYS: Array<{ key: keyof MicrostructureResult; name: string; unit: string; description: string; color: string; max: number; format: 'int' | 'float' }> = [
+  { key: 'fiberInterweaving', name: '纤维交织度', unit: '', description: '纤维相互缠绕交织的程度，越高表示纤维结合越紧密', color: '#1890ff', max: 100, format: 'float' },
+  { key: 'poreSize', name: '平均孔径', unit: 'μm', description: '纸页内部孔隙的平均直径，影响吸墨性和透气性', color: '#722ed1', max: 50, format: 'float' },
+  { key: 'poreDistribution', name: '孔径分布', unit: '', description: '孔隙大小的均匀程度，越高表示孔径越一致', color: '#13c2c2', max: 100, format: 'float' },
+  { key: 'uniformity', name: '纸页匀度', unit: '', description: '纤维在纸页中的分布均匀性，越高表示成纸越均匀', color: '#faad14', max: 100, format: 'float' },
+  { key: 'layerCount', name: '层次数量', unit: '层', description: '纸页截面的纤维分层数量，影响层次感和强度', color: '#52c41a', max: 15, format: 'int' },
+  { key: 'layerBonding', name: '层间结合', unit: '', description: '各纤维层之间的结合强度，影响纸张抗分层能力', color: '#eb2f96', max: 100, format: 'float' }
+]
+
 export const RATING_DIMENSIONS: Array<{ key: keyof RatingDetail; name: string; description: string }> = [
   { key: 'strength', name: '强度', description: '纸张抗拉、抗撕裂能力' },
   { key: 'appearance', name: '外观', description: '色泽、均匀度、外观质感' },

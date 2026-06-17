@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, provide } from 'vue'
 import FiberSlider from './components/FiberSlider.vue'
 import FiberPieChart from './components/FiberPieChart.vue'
 import PerformanceRadar from './components/PerformanceRadar.vue'
@@ -11,33 +11,61 @@ import ExperimentArchive from './components/ExperimentArchive.vue'
 import RatingManager from './components/RatingManager.vue'
 import ResearchNotes from './components/ResearchNotes.vue'
 import RecipeKnowledgeBase from './components/RecipeKnowledgeBase.vue'
+import MicrostructureSimulationModule from './components/MicrostructureSimulationModule.vue'
 
+const activeModule = ref<'recipe' | 'microstructure'>('recipe')
 const rightTab = ref<'recipes' | 'rating' | 'experiments' | 'notes' | 'knowledge'>('recipes')
+
+function switchModule(module: 'recipe' | 'microstructure') {
+  activeModule.value = module
+}
+
+provide('switchModule', switchModule)
+provide('activeModule', activeModule)
 </script>
 
 <template>
   <div class="app-container">
-    <header class="app-header">
-      <div class="header-content">
-        <div class="logo">
-          <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="8" width="40" height="32" rx="2" stroke="#D4A574" stroke-width="2" fill="#FFF8F0"/>
-            <path d="M12 16L14 24L18 20L22 28L26 22L30 26L36 18" stroke="#8B7355" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M12 28L16 32L20 28L24 34L28 30L32 36L36 32" stroke="#7CB342" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
-          </svg>
-          <div class="title-group">
-            <h1 class="app-title">手工纸配方设计系统</h1>
-            <p class="app-subtitle">探索纤维配比与纸张性能的奥秘</p>
+    <template v-if="activeModule === 'recipe'">
+      <header class="app-header">
+        <div class="header-content">
+          <div class="logo">
+            <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="4" y="8" width="40" height="32" rx="2" stroke="#D4A574" stroke-width="2" fill="#FFF8F0"/>
+              <path d="M12 16L14 24L18 20L22 28L26 22L30 26L36 18" stroke="#8B7355" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 28L16 32L20 28L24 34L28 30L32 36L36 32" stroke="#7CB342" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+            </svg>
+            <div class="title-group">
+              <h1 class="app-title">手工纸配方设计系统</h1>
+              <p class="app-subtitle">探索纤维配比与纸张性能的奥秘</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <div class="module-switcher">
+              <button
+                class="module-btn"
+                :class="{ active: activeModule === 'recipe' }"
+                @click="switchModule('recipe')"
+              >
+                📋 配方设计
+              </button>
+              <button
+                class="module-btn"
+                :class="{ active: (activeModule as string) === 'microstructure' }"
+                @click="switchModule('microstructure')"
+              >
+                🔬 微观模拟
+              </button>
+            </div>
+          </div>
+          <div class="header-decoration">
+            <div class="fiber-dot dot-1"></div>
+            <div class="fiber-dot dot-2"></div>
+            <div class="fiber-dot dot-3"></div>
+            <div class="fiber-dot dot-4"></div>
           </div>
         </div>
-        <div class="header-decoration">
-          <div class="fiber-dot dot-1"></div>
-          <div class="fiber-dot dot-2"></div>
-          <div class="fiber-dot dot-3"></div>
-          <div class="fiber-dot dot-4"></div>
-        </div>
-      </div>
-    </header>
+      </header>
 
     <main class="app-main">
       <div class="main-grid">
@@ -105,6 +133,9 @@ const rightTab = ref<'recipes' | 'rating' | 'experiments' | 'notes' | 'knowledge
     <footer class="app-footer">
       <p>手工纸研究配方设计系统 · 基于传统工艺与现代材料科学</p>
     </footer>
+    </template>
+
+    <MicrostructureSimulationModule v-else />
   </div>
 </template>
 
@@ -133,6 +164,46 @@ const rightTab = ref<'recipes' | 'rating' | 'experiments' | 'notes' | 'knowledge
   align-items: center;
   position: relative;
   z-index: 1;
+}
+
+.header-actions {
+  position: relative;
+  z-index: 2;
+}
+
+.module-switcher {
+  display: flex;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.module-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.module-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.module-btn.active {
+  background: #fff;
+  color: #8B7355;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .logo {
