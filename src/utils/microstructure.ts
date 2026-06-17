@@ -1,5 +1,69 @@
 import type { FiberRatio, ProcessParams, MicrostructureResult, PredictionIndicators } from '../types'
 
+export interface LayerInfo {
+  index: number
+  thickness: number
+  density: number
+  fiberMix: FiberRatio
+  isTop: boolean
+  isBottom: boolean
+}
+
+export interface FiberPath {
+  points: Array<{ x: number; y: number }>
+  color: string
+  width: number
+}
+
+export interface PoreHistogramBin {
+  range: string
+  count: number
+}
+
+export interface FullSimulationResult {
+  microstructure: MicrostructureResult
+  prediction: PredictionIndicators
+  poreHistogram: PoreHistogramBin[]
+  fiberPaths: FiberPath[]
+  layerInfo: LayerInfo[]
+}
+
+class SeededRandom {
+  private seed: number
+
+  constructor(seed: number) {
+    this.seed = seed >>> 0
+  }
+
+  next(): number {
+    this.seed = (this.seed * 1664525 + 1013904223) >>> 0
+    return this.seed / 0xffffffff
+  }
+
+  range(min: number, max: number): number {
+    return min + this.next() * (max - min)
+  }
+
+  int(min: number, max: number): number {
+    return Math.floor(this.range(min, max + 1))
+  }
+}
+
+function generateSeed(ratio: FiberRatio, params: ProcessParams, salt: number = 0): number {
+  let hash = 2166136261
+  const values = [
+    ratio.chuPi, ratio.hemp, ratio.bamboo, ratio.straw,
+    params.beatingDegree, params.sheetThickness, params.pressingIntensity,
+    params.dryingTemperature, params.dryingDuration,
+    salt
+  ]
+  for (const v of values) {
+    hash ^= Math.round(v * 1000)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
 function fiberLengthWeight(ratio: FiberRatio): number {
   const weights: Record<keyof FiberRatio, number> = {
     chuPi: 5.6,
@@ -141,10 +205,16 @@ export function predictIndicators(
   }
 }
 
-export function generatePoreHistogram(micro: MicrostructureResult): Array<{ range: string; count: number }> {
+export function generatePoreHistogram(
+  micro: MicrostructureResult,
+  ratio: FiberRatio,
+  params: ProcessParams
+): PoreHistogramBin[] {
   const baseSize = micro.poreSize
   const dist = micro.poreDistribution / 100
   const spread = 1.0 - dist * 0.7
+
+  const rng = new SeededRandom(generateSeed(ratio, params, 1))
 
   const ranges = [
     { range: '0-5', min: 0, max: 5 },
@@ -159,7 +229,7 @@ export function generatePoreHistogram(micro: MicrostructureResult): Array<{ rang
     const mid = (r.min + r.max) / 2
     const diff = (mid - baseSize) / (baseSize * spread + 1)
     const gaussian = Math.exp(-0.5 * diff * diff)
-    const count = Math.round(gaussian * 100 * (0.8 + Math.random() * 0.4))
+    const count = Math.round(gaussian * 100 * (0.8 + rng.next() * 0.4))
     return { range: r.range, count }
   })
 }
@@ -169,8 +239,8 @@ export function generateFiberPaths(
   params: ProcessParams,
   width: number,
   height: number
-): Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }> {
-  const fibers: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }> = []
+): FiberPath[] {
+  const fibers: FiberPath[] = []
 
   const fiberConfig: Array<{ key: keyof FiberRatio; color: string; baseLen: number; baseW: number }> = [
     { key: 'chuPi', color: '#D4A574', baseLen: 40, baseW: 2.0 },
@@ -178,6 +248,8 @@ export function generateFiberPaths(
     { key: 'bamboo', color: '#7CB342', baseLen: 20, baseW: 1.5 },
     { key: 'straw', color: '#FDD835', baseLen: 12, baseW: 1.0 }
   ]
+
+  const rng = new SeededRandom(generateSeed(ratio, params, 2))
 
   const bd = params.beatingDegree
   const lenScale = 1.0 - (bd - 10) / 80 * 0.5
@@ -190,10 +262,10 @@ export function generateFiberPaths(
     if (count === 0) continue
 
     for (let i = 0; i < count; i++) {
-      const startX = Math.random() * width
-      const startY = Math.random() * height
-      const len = fc.baseLen * lenScale * (0.6 + Math.random() * 0.8)
-      const angle = (Math.random() - 0.5) * Math.PI * 0.6
+      const startX = rng.next() * width
+      const startY = rng.next() * height
+      const len = fc.baseLen * lenScale * (0.6 + rng.next() * 0.8)
+      const angle = (rng.next() - 0.5) * Math.PI * 0.6
       const segments = 6
       const points: Array<{ x: number; y: number }> = []
 
@@ -201,8 +273,8 @@ export function generateFiberPaths(
         const t = s / segments
         const baseX = startX + Math.cos(angle) * len * t
         const baseY = startY + Math.sin(angle) * len * t
-        const wobbleX = (Math.random() - 0.5) * 4
-        const wobbleY = (Math.random() - 0.5) * 4
+        const wobbleX = (rng.next() - 0.5) * 4
+        const wobbleY = (rng.next() - 0.5) * 4
         points.push({
           x: Math.max(0, Math.min(width, baseX + wobbleX)),
           y: Math.max(0, Math.min(height, baseY + wobbleY))
@@ -218,4 +290,67 @@ export function generateFiberPaths(
   }
 
   return fibers
+}
+
+export function generateLayerInfo(
+  ratio: FiberRatio,
+  params: ProcessParams,
+  microstructure: MicrostructureResult
+): LayerInfo[] {
+  const count = microstructure.layerCount
+  const layers: LayerInfo[] = []
+  const totalThickness = params.sheetThickness
+  const layerThickness = totalThickness / count
+  const bondingFactor = microstructure.layerBonding / 100
+
+  const rng = new SeededRandom(generateSeed(ratio, params, 3))
+
+  for (let i = 0; i < count; i++) {
+    const randomFactor = 0.9 + rng.next() * 0.2
+    const thickness = layerThickness * randomFactor
+    const density = 0.6 + bondingFactor * 0.3 + rng.next() * 0.1
+    const fiberMix: FiberRatio = {
+      chuPi: ratio.chuPi * (0.9 + rng.next() * 0.2),
+      hemp: ratio.hemp * (0.9 + rng.next() * 0.2),
+      bamboo: ratio.bamboo * (0.9 + rng.next() * 0.2),
+      straw: ratio.straw * (0.9 + rng.next() * 0.2)
+    }
+    const total = fiberMix.chuPi + fiberMix.hemp + fiberMix.bamboo + fiberMix.straw
+    const keys: Array<keyof FiberRatio> = ['chuPi', 'hemp', 'bamboo', 'straw']
+    keys.forEach(k => {
+      fiberMix[k] = (fiberMix[k] / total) * 100
+    })
+
+    layers.push({
+      index: i,
+      thickness,
+      density,
+      fiberMix,
+      isTop: i === 0,
+      isBottom: i === count - 1
+    })
+  }
+
+  return layers
+}
+
+export function runFullSimulation(
+  ratio: FiberRatio,
+  params: ProcessParams,
+  canvasWidth: number = 600,
+  canvasHeight: number = 300
+): FullSimulationResult {
+  const microstructure = simulateMicrostructure(ratio, params)
+  const prediction = predictIndicators(ratio, params, microstructure)
+  const poreHistogram = generatePoreHistogram(microstructure, ratio, params)
+  const fiberPaths = generateFiberPaths(ratio, params, canvasWidth, canvasHeight)
+  const layerInfo = generateLayerInfo(ratio, params, microstructure)
+
+  return {
+    microstructure,
+    prediction,
+    poreHistogram,
+    fiberPaths,
+    layerInfo
+  }
 }

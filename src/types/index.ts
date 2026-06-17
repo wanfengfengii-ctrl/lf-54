@@ -305,6 +305,9 @@ export interface SimulationSnapshot {
   fiberRatio: FiberRatio
   microstructure: MicrostructureResult
   prediction: PredictionIndicators
+  poreHistogram: Array<{ range: string; count: number }>
+  fiberPaths: Array<{ points: Array<{ x: number; y: number }>; color: string; width: number }>
+  layerInfo: Array<{ index: number; thickness: number; density: number; fiberMix: FiberRatio; isTop: boolean; isBottom: boolean }>
   createdAt: number
   note: string
 }

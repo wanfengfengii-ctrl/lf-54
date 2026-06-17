@@ -9,9 +9,11 @@ const chartRef = ref<HTMLDivElement | null>(null)
 let chartInstance: echarts.ECharts | null = null
 
 const microstructure = computed(() => store.currentMicrostructure)
+const processParams = computed(() => store.processParams)
+const fiberRatio = computed(() => store.currentRatio)
 
 const histogramData = computed(() => {
-  return generatePoreHistogram(microstructure.value)
+  return generatePoreHistogram(microstructure.value, fiberRatio.value, processParams.value)
 })
 
 const avgPoreSize = computed(() => microstructure.value.poreSize)
@@ -30,7 +32,9 @@ const seriesData = computed(() => {
   
   const snapshotColors = ['#52c41a', '#faad14', '#f5222d']
   selectedSnapshots.value.forEach((snapshot, index) => {
-    const histData = generatePoreHistogram(snapshot.microstructure)
+    const histData = snapshot.poreHistogram && snapshot.poreHistogram.length > 0
+      ? snapshot.poreHistogram
+      : generatePoreHistogram(snapshot.microstructure, snapshot.fiberRatio, snapshot.params)
     data.push({
       name: `快照 ${index + 1}: ${snapshot.note || new Date(snapshot.createdAt).toLocaleTimeString()}`,
       data: histData.map(d => d.count),

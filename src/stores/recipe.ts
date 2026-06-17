@@ -17,7 +17,7 @@ import type {
 } from '../types'
 import { FIBER_INFO_LIST, PERFORMANCE_KEYS } from '../types'
 import { calculatePerformance, validateRatio, generateId } from '../utils/performance'
-import { simulateMicrostructure, predictIndicators } from '../utils/microstructure'
+import { simulateMicrostructure, predictIndicators, generatePoreHistogram, generateFiberPaths, generateLayerInfo } from '../utils/microstructure'
 import type { ProcessParams, MicrostructureResult, PredictionIndicators, SimulationSnapshot } from '../types'
 import { PROCESS_PARAM_RANGES } from '../types'
 
@@ -983,12 +983,19 @@ ${recipe.conclusion || '暂无结论'}
   }
 
   function saveSimulationSnapshot(note: string = ''): SimulationSnapshot {
+    const ratio = currentRatio.value
+    const params = processParams.value
+    const micro = currentMicrostructure.value
+
     const snapshot: SimulationSnapshot = {
       id: generateId(),
-      params: { ...processParams.value },
-      fiberRatio: { ...currentRatio.value },
-      microstructure: { ...currentMicrostructure.value },
+      params: { ...params },
+      fiberRatio: { ...ratio },
+      microstructure: { ...micro },
       prediction: { ...currentPrediction.value },
+      poreHistogram: generatePoreHistogram(micro, ratio, params),
+      fiberPaths: generateFiberPaths(ratio, params, 600, 400),
+      layerInfo: generateLayerInfo(ratio, params, micro),
       createdAt: Date.now(),
       note
     }

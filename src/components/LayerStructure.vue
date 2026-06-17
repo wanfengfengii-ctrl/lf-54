@@ -2,6 +2,23 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRecipeStore } from '../stores/recipe'
 import { FIBER_INFO_LIST } from '../types'
+import { generateLayerInfo, type LayerInfo } from '../utils/microstructure'
+import type { FiberRatio, ProcessParams } from '../types'
+
+class SeededRandom {
+  private seed: number
+  constructor(seed: number) { this.seed = seed >>> 0 }
+  next(): number { this.seed = (this.seed * 1664525 + 1013904223) >>> 0; return this.seed / 0xffffffff }
+  range(min: number, max: number): number { return min + this.next() * (max - min) }
+  int(min: number, max: number): number { return Math.floor(this.range(min, max + 1)) }
+}
+
+function generateLayerSeed(ratio: FiberRatio, params: ProcessParams, salt: number = 0): number {
+  let hash = 2166136261
+  const values = [ratio.chuPi, ratio.hemp, ratio.bamboo, ratio.straw, params.beatingDegree, params.sheetThickness, params.pressingIntensity, params.dryingTemperature, params.dryingDuration, salt]
+  for (const v of values) { hash ^= Math.round(v * 1000); hash = Math.imul(hash, 16777619) }
+  return hash >>> 0
+}
 
 const store = useRecipeStore()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -17,44 +34,20 @@ const layerCount = computed(() => microstructure.value.layerCount)
 const layerBonding = computed(() => microstructure.value.layerBonding)
 const uniformity = computed(() => microstructure.value.uniformity)
 
-const layerInfo = computed(() => {
-  const count = layerCount.value
-  const layers = []
-  const totalThickness = processParams.value.sheetThickness
-  const layerThickness = totalThickness / count
-  
-  for (let i = 0; i < count; i++) {
-    const randomFactor = 0.9 + Math.random() * 0.2
-    const thickness = layerThickness * randomFactor
-    const density = 0.6 + (layerBonding.value / 100) * 0.3 + Math.random() * 0.1
-    const fiberMix = {
-      chuPi: fiberRatio.value.chuPi * (0.9 + Math.random() * 0.2),
-      hemp: fiberRatio.value.hemp * (0.9 + Math.random() * 0.2),
-      bamboo: fiberRatio.value.bamboo * (0.9 + Math.random() * 0.2),
-      straw: fiberRatio.value.straw * (0.9 + Math.random() * 0.2)
-    }
-    const total = fiberMix.chuPi + fiberMix.hemp + fiberMix.bamboo + fiberMix.straw
-    Object.keys(fiberMix).forEach(k => {
-      fiberMix[k as keyof typeof fiberMix] = (fiberMix[k as keyof typeof fiberMix] / total) * 100
-    })
-    
-    layers.push({
-      index: i,
-      thickness,
-      density,
-      fiberMix,
-      isTop: i === 0,
-      isBottom: i === count - 1
-    })
-  }
-  
-  return layers
+const layerInfo = computed<LayerInfo[]>(() => {
+  return generateLayerInfo(fiberRatio.value, processParams.value, microstructure.value)
 })
 
-function getDominantFiber(fiberMix: Record<string, number>): { name: string; color: string } {
-  let maxKey = 'chuPi'
+const layerFiberRng = computed(() => {
+  return new SeededRandom(generateLayerSeed(fiberRatio.value, processParams.value, 4))
+})
+
+function getDominantFiber(fiberMix: FiberRatio): { name: string; color: string } {
+  let maxKey: keyof FiberRatio = 'chuPi'
   let maxVal = 0
-  Object.entries(fiberMix).forEach(([k, v]) => {
+  const keys: Array<keyof FiberRatio> = ['chuPi', 'hemp', 'bamboo', 'straw']
+  keys.forEach((k) => {
+    const v = fiberMix[k]
     if (v > maxVal) {
       maxVal = v
       maxKey = k
@@ -116,7 +109,7 @@ function drawLayerStructure() {
     ctx.stroke()
     ctx.setLineDash([])
     
-    drawFibersInLayer(ctx, padding.left, layerY, chartWidth, layerHeight, layer, index)
+    drawFibersInLayer(ctx, padding.left, layerY, chartWidth, layerHeight, layer, index, layerFiberRng.value)
     
     ctx.fillStyle = '#666'
     ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif'
@@ -166,26 +159,37 @@ function drawFibersInLayer(
   y: number,
   width: number,
   height: number,
-  _layer: any,
-  _layerIndex: number
+  layer: LayerInfo,
+  _layerIndex: number,
+  rng: SeededRandom
 ) {
   const fiberCount = Math.floor(width / 30)
   const fiberColors = FIBER_INFO_LIST.map(f => f.color)
-  
+  const layerRatio = layer.fiberMix
+  const totalMix = layerRatio.chuPi + layerRatio.hemp + layerRatio.bamboo + layerRatio.straw
+
   for (let i = 0; i < fiberCount; i++) {
-    const fx = x + Math.random() * width
-    const fy = y + Math.random() * height
-    const fWidth = 30 + Math.random() * 60
-    const fHeight = 1 + Math.random() * 2
+    const fx = x + rng.next() * width
+    const fy = y + rng.next() * height
+    const fWidth = 30 + rng.next() * 60
+    const fHeight = 1 + rng.next() * 2
     
-    const angle = (Math.random() - 0.5) * 0.5
-    const colorIndex = Math.floor(Math.random() * fiberColors.length)
+    const angle = (rng.next() - 0.5) * 0.5
+    
+    let colorIndex = 0
+    const r = rng.next() * totalMix
+    let acc = 0
+    const ratioArr = [layerRatio.chuPi, layerRatio.hemp, layerRatio.bamboo, layerRatio.straw]
+    for (let j = 0; j < ratioArr.length; j++) {
+      acc += ratioArr[j]
+      if (r <= acc) { colorIndex = j; break }
+    }
     
     ctx.save()
     ctx.translate(fx, fy)
     ctx.rotate(angle)
     
-    ctx.fillStyle = adjustColorAlpha(fiberColors[colorIndex], 0.4 + Math.random() * 0.3)
+    ctx.fillStyle = adjustColorAlpha(fiberColors[colorIndex], 0.4 + rng.next() * 0.3)
     ctx.fillRect(-fWidth / 2, -fHeight / 2, fWidth, fHeight)
     
     ctx.restore()
