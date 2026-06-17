@@ -74,11 +74,16 @@ function updateTrendChart() {
   if (!trendChartInstance || !targetRecipe.value) return
 
   const history = store.getRatingHistoryForRecipe(targetRecipe.value.id)
-  if (history.length < 2) return
+  if (history.length < 2) {
+    trendChartInstance.clear()
+    return
+  }
 
-  const xData = history.map(h => {
-    const d = new Date(h.createdAt)
-    return `${d.getMonth() + 1}/${d.getDate()}`
+  const sortedHistory = [...history].sort((a, b) => a.ratedAt - b.ratedAt)
+
+  const xData = sortedHistory.map(h => {
+    const d = new Date(h.ratedAt)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
 
   const series = RATING_DIMENSIONS.filter(d => d.key !== 'overall').map(dim => ({
@@ -87,7 +92,7 @@ function updateTrendChart() {
     smooth: true,
     symbol: 'circle',
     symbolSize: 6,
-    data: history.map(h => h.ratingDetail[dim.key] || null),
+    data: sortedHistory.map(h => h.ratingDetail[dim.key] || null),
     lineStyle: { width: 2 },
     emphasis: { focus: 'series' as const }
   }))
@@ -98,7 +103,7 @@ function updateTrendChart() {
     smooth: true,
     symbol: 'diamond',
     symbolSize: 8,
-    data: history.map(h => h.ratingDetail.overall || null),
+    data: sortedHistory.map(h => h.ratingDetail.overall || null),
     lineStyle: { width: 3, type: 'dashed' as const },
     emphasis: { focus: 'series' as const }
   })
@@ -119,7 +124,7 @@ function updateTrendChart() {
     xAxis: {
       type: 'category',
       data: xData,
-      axisLabel: { fontSize: 10, color: '#666' },
+      axisLabel: { fontSize: 10, color: '#666', rotate: 30 },
       axisLine: { lineStyle: { color: '#e8e8e8' } }
     },
     yAxis: {
@@ -190,13 +195,21 @@ function saveRating() {
   if (!editingRating.value) return
 
   if (targetRecipe.value) {
-    store.addRatingHistory(targetRecipe.value.id, {
-      ratingDetail: { ...editingRating.value },
-      note: ratingNote.value || undefined,
-      experimentRecordId: linkExperimentId.value || undefined
-    })
+    const historyResult = store.addRatingHistory(
+      targetRecipe.value.id,
+      { ...editingRating.value },
+      ratingNote.value || undefined,
+      linkExperimentId.value || undefined
+    )
     const result = store.updateRecipeRatingDetail(targetRecipe.value.id, editingRating.value)
-    showMessage(result.message, result.success ? 'success' : 'error')
+    if (historyResult.success) {
+      showMessage(`${result.message}，评级历史已记录`, result.success ? 'success' : 'error')
+      if (showTrend.value) {
+        setTimeout(() => updateTrendChart(), 100)
+      }
+    } else {
+      showMessage(historyResult.message, 'error')
+    }
   } else {
     store.currentRatingDetail = { ...editingRating.value }
     store.currentRating = editingRating.value.overall
@@ -206,6 +219,12 @@ function saveRating() {
   ratingNote.value = ''
   linkExperimentId.value = null
 }
+
+watch(() => store.ratingHistory.length, () => {
+  if (showTrend.value) {
+    setTimeout(() => updateTrendChart(), 50)
+  }
+})
 
 function formatDate(timestamp: number): string {
   const d = new Date(timestamp)
@@ -291,7 +310,7 @@ function getRatingColor(value: number): string {
       <div class="history-list">
         <div v-for="entry in ratingHistory.slice().reverse()" :key="entry.id" class="history-item">
           <div class="history-header">
-            <span class="history-date">{{ formatDate(entry.createdAt) }}</span>
+            <span class="history-date">{{ formatDate(entry.ratedAt) }}</span>
             <span class="history-rating" :style="{ color: getRatingColor(entry.ratingDetail.overall) }">
               {{ renderStars(entry.ratingDetail.overall) }} {{ entry.ratingDetail.overall }}
             </span>

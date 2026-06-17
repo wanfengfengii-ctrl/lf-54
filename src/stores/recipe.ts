@@ -141,7 +141,9 @@ export const useRecipeStore = defineStore('recipe', () => {
       description: '标准手工纸抄造实验记录模板',
       defaultConditions: '室温：25℃，湿度：60%，抄纸工具：竹帘\n浆料浓度：0.5%，抄纸速度：匀速\n压榨压力：5kg，干燥温度：40℃',
       observationGuide: '1. 浆料分散状态\n2. 抄纸时纤维交织情况\n3. 湿纸页成型质量\n4. 压榨后水分含量\n5. 干燥后外观变化\n6. 成纸匀度观察',
+      defaultObservations: '浆料分散良好，纤维交织均匀；湿纸页成型均匀，无明显破洞；压榨后水分含量适中；干燥后纸面平整，匀度良好。',
       resultTemplate: '## 实验结果总结\n\n### 外观\n- 颜色：\n- 匀度：\n- 纹理：\n\n### 物理性能\n- 手感：\n- 韧性：\n- 强度初步评估：\n\n### 与预期对比\n- 符合预期的方面：\n- 需要改进的方面：\n\n### 下一步计划\n',
+      defaultTags: ['标准实验', '抄造记录'],
       createdAt: Date.now() - 86400000 * 30,
       isDefault: true
     },
@@ -151,7 +153,9 @@ export const useRecipeStore = defineStore('recipe', () => {
       description: '加速老化测试记录模板',
       defaultConditions: '老化设备：UV加速老化箱\n温度：60℃，湿度：50%\nUV强度：0.89W/m²@340nm\n测试周期：72小时',
       observationGuide: '1. 初始状态记录（颜色、强度）\n2. 24小时后观察\n3. 48小时后观察\n4. 72小时后观察\n5. 黄变程度对比\n6. 强度损失评估',
+      defaultObservations: '初始状态：颜色正常，强度良好。\n24小时：轻微黄变，强度无明显变化。\n48小时：黄变加剧，略有脆化。\n72小时：黄变明显，韧性下降。',
       resultTemplate: '## 耐久性测试结果\n\n### 测试前后对比\n| 指标 | 测试前 | 测试后 | 变化率 |\n|------|--------|--------|--------|\n| 白度 | | | |\n| 强度 | | | |\n| 外观 | | | |\n\n### 综合评估\n- 耐久性等级：\n- 适用场景：\n- 改进建议：\n',
+      defaultTags: ['耐久性测试', '老化实验'],
       createdAt: Date.now() - 86400000 * 20
     }
   ])
@@ -886,7 +890,10 @@ ${recipe.conclusion || '暂无结论'}
       observations: record.observations,
       result: record.result,
       rating: record.rating,
-      archivedAt: null
+      archivedAt: null,
+      recipeVersionId: record.recipeVersionId,
+      templateId: record.templateId,
+      tags: record.tags && record.tags.length > 0 ? [...record.tags] : undefined
     }
 
     experimentRecords.value.push(newRecord)

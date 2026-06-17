@@ -114,19 +114,28 @@ function openAddModal() {
 }
 
 function applyTemplate(templateId: string) {
+  if (!templateId) {
+    newRecord.value.conditions = ''
+    newRecord.value.observations = ''
+    newRecord.value.result = ''
+    newRecord.value.tags = []
+    return
+  }
   const template = store.experimentTemplates.find(t => t.id === templateId)
   if (template) {
-    newRecord.value.conditions = template.defaultConditions
-    newRecord.value.observations = template.defaultObservations
-    newRecord.value.tags = [...template.defaultTags]
+    newRecord.value = {
+      ...newRecord.value,
+      conditions: template.defaultConditions,
+      observations: template.defaultObservations,
+      result: template.resultTemplate,
+      tags: [...(template.defaultTags || [])]
+    }
   }
 }
 
 watch(selectedTemplateId, (newVal) => {
-  if (newVal) {
-    applyTemplate(newVal)
-  }
-})
+  applyTemplate(newVal)
+}, { immediate: false })
 
 function setRecordRating(rating: number) {
   newRecord.value.rating = newRecord.value.rating === rating ? 0 : rating

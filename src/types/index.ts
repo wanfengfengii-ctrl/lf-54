@@ -82,7 +82,9 @@ export interface ExperimentTemplate {
   description: string
   defaultConditions: string
   observationGuide: string
+  defaultObservations: string
   resultTemplate: string
+  defaultTags: string[]
   createdAt: number
   isDefault?: boolean
 }
@@ -146,6 +148,11 @@ export interface FiberInfo {
   key: keyof FiberRatio
   name: string
   color: string
+  description: string
+  fiberLength: string
+  origin: string
+  processingMethod: string
+  usageTips: string
   basePerformance: PaperPerformance
 }
 
@@ -154,6 +161,11 @@ export const FIBER_INFO_LIST: FiberInfo[] = [
     key: 'chuPi',
     name: '楮皮',
     color: '#D4A574',
+    description: '楮皮（构树皮）是传统手工纸最主要的原料之一，纤维细长柔韧，成纸后具有极佳的韧性和耐久性，是制作高级书画纸的首选材料。楮皮纸素有"纸寿千年"的美誉，是历代书画名家的挚爱。',
+    fiberLength: '6-12mm',
+    origin: '中国北方、长江流域',
+    processingMethod: '剥皮→浸泡→蒸煮→漂洗→打浆',
+    usageTips: '建议配比在30%-70%之间。高配比适合制作耐久的档案纸、书画纸；低配比可改善纸张韧性。与竹浆搭配可在成本与性能间取得良好平衡。打浆时宜采用轻打，以保持纤维长度。',
     basePerformance: {
       strength: 90,
       waterAbsorption: 60,
@@ -166,6 +178,11 @@ export const FIBER_INFO_LIST: FiberInfo[] = [
     key: 'hemp',
     name: '麻',
     color: '#8B7355',
+    description: '麻纤维（包括苎麻、亚麻）是最早被用于造纸的植物纤维之一，纤维粗长，强度高，成纸手感厚实，具有独特的纹理质感。麻纸在古代广泛用于文书、典籍的抄写。',
+    fiberLength: '20-200mm',
+    origin: '全国各地均有种植',
+    processingMethod: '剥皮→浸沤→晾晒→蒸煮→漂洗→打浆',
+    usageTips: '麻纤维强度高，适合需要高耐破度的纸张。建议配比20%-50%。高配比会使纸面纹理明显，适合仿古纸、艺术纸；低配比可增强纸张的撕裂强度。需要较长时间打浆才能获得良好的匀度。',
     basePerformance: {
       strength: 85,
       waterAbsorption: 75,
@@ -178,6 +195,11 @@ export const FIBER_INFO_LIST: FiberInfo[] = [
     key: 'bamboo',
     name: '竹',
     color: '#7CB342',
+    description: '竹浆是中国南方地区传统手工纸的重要原料，纤维长度适中，成纸匀度好，吸墨性佳，是制作书法、绘画用纸的理想材料。竹纸自宋代以来成为主流纸张，极大地促进了文化传播。',
+    fiberLength: '1.5-3.0mm',
+    origin: '中国南方各省（浙江、福建、四川等）',
+    processingMethod: '砍竹→切段→浸泡→蒸煮→漂洗→捣浆→抄纸',
+    usageTips: '竹浆吸墨性好，适合书画创作。建议配比20%-60%。高配比适合书法练习纸、国画用纸；低配比可改善纸张的印刷适应性。竹浆需充分打浆以获得良好的纤维结合力，注意控制打浆度避免纸张变脆。',
     basePerformance: {
       strength: 70,
       waterAbsorption: 85,
@@ -190,6 +212,11 @@ export const FIBER_INFO_LIST: FiberInfo[] = [
     key: 'straw',
     name: '稻草',
     color: '#FDD835',
+    description: '稻草浆是最经济的造纸原料，纤维细短，成纸柔软，白度较高，但强度较低。稻草纸在民间广泛用于包装、裱糊、练习用纸等，是传统社会中最普及的纸张类型。',
+    fiberLength: '0.5-1.5mm',
+    origin: '全国各水稻产区',
+    processingMethod: '收割→晾晒→切段→浸泡→蒸煮→漂洗→打浆→抄纸',
+    usageTips: '稻草浆成本低，适合大量生产。建议配比10%-40%。高配比适合练习纸、包装纸；低配比可调节纸张的柔软度和白度。稻草纤维较短，需与长纤维搭配使用以保证纸张强度，打浆时应避免过度切断。',
     basePerformance: {
       strength: 55,
       waterAbsorption: 90,

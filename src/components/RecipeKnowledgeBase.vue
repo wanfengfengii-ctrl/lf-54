@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRecipeStore } from '../stores/recipe'
-import { FIBER_INFO_LIST, PERFORMANCE_KEYS } from '../types'
+import { FIBER_INFO_LIST, FIBER_DESCRIPTIONS, PERFORMANCE_KEYS } from '../types'
 import type { RecipeRecommendation } from '../types'
 
 const store = useRecipeStore()
