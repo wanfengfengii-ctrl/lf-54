@@ -1,10 +1,18 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import FiberSlider from './components/FiberSlider.vue'
 import FiberPieChart from './components/FiberPieChart.vue'
 import PerformanceRadar from './components/PerformanceRadar.vue'
 import RecipeList from './components/RecipeList.vue'
 import RecipeManager from './components/RecipeManager.vue'
 import RecipeComparison from './components/RecipeComparison.vue'
+import FiberAnalysisPanel from './components/FiberAnalysisPanel.vue'
+import ExperimentArchive from './components/ExperimentArchive.vue'
+import RatingManager from './components/RatingManager.vue'
+import ResearchNotes from './components/ResearchNotes.vue'
+import RecipeKnowledgeBase from './components/RecipeKnowledgeBase.vue'
+
+const rightTab = ref<'recipes' | 'rating' | 'experiments' | 'notes' | 'knowledge'>('recipes')
 </script>
 
 <template>
@@ -49,10 +57,47 @@ import RecipeComparison from './components/RecipeComparison.vue'
           </div>
 
           <RecipeComparison />
+
+          <FiberAnalysisPanel />
         </div>
 
         <div class="right-column">
-          <RecipeList />
+          <div class="tab-container">
+            <div class="tab-header">
+              <button
+                class="tab-btn"
+                :class="{ active: rightTab === 'recipes' }"
+                @click="rightTab = 'recipes'"
+              >📋 历史配方</button>
+              <button
+                class="tab-btn"
+                :class="{ active: rightTab === 'rating' }"
+                @click="rightTab = 'rating'"
+              >⭐ 评级管理</button>
+              <button
+                class="tab-btn"
+                :class="{ active: rightTab === 'experiments' }"
+                @click="rightTab = 'experiments'"
+              >🔬 实验记录</button>
+              <button
+                class="tab-btn"
+                :class="{ active: rightTab === 'notes' }"
+                @click="rightTab = 'notes'"
+              >📝 研究笔记</button>
+              <button
+                class="tab-btn"
+                :class="{ active: rightTab === 'knowledge' }"
+                @click="rightTab = 'knowledge'"
+              >📚 知识库</button>
+            </div>
+            <div class="tab-content">
+              <RecipeList v-show="rightTab === 'recipes'" />
+              <RatingManager v-show="rightTab === 'rating'" />
+              <ExperimentArchive v-show="rightTab === 'experiments'" />
+              <ResearchNotes v-show="rightTab === 'notes'" />
+              <RecipeKnowledgeBase v-show="rightTab === 'knowledge'" />
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -81,7 +126,7 @@ import RecipeComparison from './components/RecipeComparison.vue'
 }
 
 .header-content {
-  max-width: 1600px;
+  max-width: 1800px;
   margin: 0 auto;
   display: flex;
   justify-content: space-between;
@@ -166,7 +211,7 @@ import RecipeComparison from './components/RecipeComparison.vue'
 .app-main {
   flex: 1;
   padding: 24px;
-  max-width: 1600px;
+  max-width: 1800px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
@@ -174,7 +219,7 @@ import RecipeComparison from './components/RecipeComparison.vue'
 
 .main-grid {
   display: grid;
-  grid-template-columns: 360px 1fr 380px;
+  grid-template-columns: 360px 1fr 400px;
   gap: 20px;
   align-items: start;
 }
@@ -183,6 +228,8 @@ import RecipeComparison from './components/RecipeComparison.vue'
   display: flex;
   flex-direction: column;
   gap: 20px;
+  position: sticky;
+  top: 24px;
 }
 
 .center-column {
@@ -192,9 +239,26 @@ import RecipeComparison from './components/RecipeComparison.vue'
 }
 
 .right-column {
-  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   max-height: calc(100vh - 160px);
-  overflow: hidden;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.right-column::-webkit-scrollbar {
+  width: 6px;
+}
+
+.right-column::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.right-column::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
 }
 
 .charts-row {
@@ -219,14 +283,70 @@ import RecipeComparison from './components/RecipeComparison.vue'
   margin: 0;
 }
 
+.tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tab-header {
+  display: flex;
+  gap: 2px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  flex: 1;
+  min-width: 70px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  background: transparent;
+  color: #666;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.tab-btn:hover {
+  color: #333;
+}
+
+.tab-btn.active {
+  background: #1890ff;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(24, 144, 255, 0.3);
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 1400px) {
+  .main-grid {
+    grid-template-columns: 340px 1fr 360px;
+  }
+}
+
 @media (max-width: 1200px) {
   .main-grid {
     grid-template-columns: 1fr;
   }
 
   .right-column {
-    min-height: auto;
     max-height: none;
+  }
+
+  .left-column {
+    position: static;
   }
 }
 
